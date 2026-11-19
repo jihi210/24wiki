@@ -1,6 +1,6 @@
 'use server';
 // Server Actions: 브라우저에서 호출하지만 서버에서 실행되는 함수들.
-// DB를 바꾸는 일은 전부 여기서 하고, 첫 줄에서 항상 권한을 확인해.
+// DB 변경 작업은 항상 여기서 수행
 
 import { randomBytes } from 'node:crypto';
 import { redirect, notFound } from 'next/navigation';
@@ -9,27 +9,52 @@ import { and, eq, ne, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { pages, revisions, members, inviteLinks, blockedEmails } from '@/lib/db/schema';
 import { getCurrentUser, requireRole, isBlocked, getValidInvite, RANK } from '@/lib/permissions';
+import { SLUG_RE, toSlug } from '@/lib/slug';
 
 const normalizeEmail = (v: FormDataEntryValue | null) => String(v ?? '').trim().toLowerCase();
 
 // ───────────── 문서 ─────────────
 
-export async function createPage(formData: FormData) {
+// unique 위반인지 확인 
+function isUniqueViolation(e: unknown) {
+  const err = e as { code?: string; cause?: { code?: string } };
+  return err?.code === '23505' || err?.cause?.code === '23505';
+}
+
+type CreatePageState = { error: string } | null;
+export async function createPage(_prev: CreatePageState, formData: FormData) : Promise<CreatePageState>{
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const title = String(formData.get('title') ?? '').trim();
-  if (!title) return;
+  if (!title) return {error: '제목을 입력하세요.'};
 
-  const [page] = await db
-    .insert(pages)
-    .values({ title, createdBy: user.email })
-    .returning({ id: pages.id });
+  const typed = String(formData.get('slug') ?? '').trim();
+  const isCustom = typed !== '';
+  const baseSlug = isCustom ? typed : toSlug(title);
+  if (!SLUG_RE.test(baseSlug)) {
+    return {error: '주소는 영어 소문자, 숫자, 하이픈(-) 으로 구성되어야 합니다.'};
+  }
 
-  // 만든 사람은 자동으로 소유자
-  await db.insert(members).values({ pageId: page.id, email: user.email, role: 'owner' });
+  let pageId: string | null = null; // 페이지 아이디
+  let savedSlug: string | null = null; // slug
+  for (let n=1; n<=20 && !pageId; n++){
+    savedSlug = n === 1 ? baseSlug : `${baseSlug}-${n}`
+    try {
+      const [page] = await db
+        .insert(pages)
+        .values({ title, slug: savedSlug, createdBy: user.email })
+        .returning({ id: pages.id });
+      pageId = page.id;
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e;  // 다른 에러는 그대로 던지기
+      if (isCustom) return { error: `"${baseSlug}"는 이미 있는 주소입니다.` };
+    }
+  }
+  if (!pageId) return { error: '주소를 만들지 못했습니다. 직접 입력해주십시오.' };
 
-  redirect(`/w/${page.id}/edit`);
+  await db.insert(members).values({ pageId, email: user.email, role: 'owner' });
+  redirect(`/docs/${savedSlug}/edit`);
 }
 
 export async function savePage(pageId: string, title: string, content: string, baseVersion: number) {
@@ -58,7 +83,7 @@ export async function savePage(pageId: string, title: string, content: string, b
     editedBy: user.email,
   });
 
-  revalidatePath(`/w/${pageId}`);
+  revalidatePath(`/docs/${pageId}`);
   return { ok: true as const };
 }
 
@@ -82,7 +107,7 @@ export async function addMember(pageId: string, formData: FormData) {
   } else {
     await db.insert(members).values({ pageId, email, role });
   }
-  revalidatePath(`/w/${pageId}/settings`);
+  revalidatePath(`/docs/${pageId}/settings`);
 }
 
 export async function removeMember(pageId: string, email: string) {
@@ -90,7 +115,7 @@ export async function removeMember(pageId: string, email: string) {
   await db
     .delete(members)
     .where(and(eq(members.pageId, pageId), eq(members.email, email), ne(members.role, 'owner')));
-  revalidatePath(`/w/${pageId}/settings`);
+  revalidatePath(`/docs/${pageId}/settings`);
 }
 
 // ───────────── 초대 링크 (소유자만) ─────────────
@@ -107,7 +132,7 @@ export async function createInviteLink(pageId: string, formData: FormData) {
     role,
     expiresAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
   });
-  revalidatePath(`/w/${pageId}/settings`);
+  revalidatePath(`/docs/${pageId}/settings`);
 }
 
 export async function revokeInviteLink(pageId: string, token: string) {
@@ -116,7 +141,7 @@ export async function revokeInviteLink(pageId: string, token: string) {
     .update(inviteLinks)
     .set({ revoked: true })
     .where(and(eq(inviteLinks.token, token), eq(inviteLinks.pageId, pageId)));
-  revalidatePath(`/w/${pageId}/settings`);
+  revalidatePath(`/docs/${pageId}/settings`);
 }
 
 export async function acceptInvite(token: string) {
@@ -157,11 +182,26 @@ export async function blockEmail(pageId: string, formData: FormData) {
   await db
     .delete(members)
     .where(and(eq(members.pageId, pageId), eq(members.email, email), ne(members.role, 'owner')));
-  revalidatePath(`/w/${pageId}/settings`);
+  revalidatePath(`/docs/${pageId}/settings`);
 }
 
 export async function unblockEmail(pageId: string, email: string) {
   await requireRole(pageId, 'owner');
   await db.delete(blockedEmails).where(and(eq(blockedEmails.pageId, pageId), eq(blockedEmails.email, email)));
-  revalidatePath(`/w/${pageId}/settings`);
+  revalidatePath(`/docs/${pageId}/settings`);
+}
+
+// 공개-비공개 전환 함수
+export async function togglePublic(pageId: string) {
+  await requireRole(pageId, 'owner');   // 소유자만
+
+  const page = await db.query.pages.findFirst({
+    where: eq(pages.id, pageId),
+    columns: { isPublic: true },
+  });
+  if (!page) return;
+
+  await db.update(pages).set({ isPublic: !page.isPublic }).where(eq(pages.id, pageId));
+  revalidatePath(`/docs/${pageId}`);
+  revalidatePath(`/docs/${pageId}/settings`);
 }

@@ -1,5 +1,5 @@
-// 이미지 업로드 허가증(토큰) 발급소.
-// 브라우저가 "이 문서에 이미지 올려도 돼?" 물어보면, 편집 권한이 있을 때만 토큰을 내줘.
+// 이미지 업로드 토큰 발급
+// 브라우저가 이미지 업로드 권한 요청하면 편집 권한이 있을 때만 토큰 발급
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 import { requireRole } from '@/lib/permissions';

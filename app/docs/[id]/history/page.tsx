@@ -21,7 +21,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
 
   return (
     <main className="mx-auto max-w-3xl p-6">
-      <Link href={`/w/${id}`} className="text-sm text-gray-500 hover:underline">
+      <Link href={`/docs/${id}`} className="text-sm text-gray-500 hover:underline">
         ← {page.title}
       </Link>
       <h1 className="mt-4 text-2xl font-bold">{page.title}의 역사</h1>

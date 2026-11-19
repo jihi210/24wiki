@@ -10,6 +10,8 @@ export const pages = pgTable('pages', {
   version: integer('version').notNull().default(1), // 저장할 때마다 +1 (동시 편집 충돌 감지용)
   createdBy: text('created_by').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  isPublic: boolean('is_public').notNull().default(false),
+  slug: text('slug').unique()
 });
 
 // 편집 기록 (나무위키의 "역사")

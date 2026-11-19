@@ -12,6 +12,7 @@ import {
   revokeInviteLink,
   blockEmail,
   unblockEmail,
+  togglePublic,
 } from '@/app/actions';
 import CopyLinkButton from '@/components/copy-link-button';
 
@@ -40,11 +41,21 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
   return (
     <main className="mx-auto max-w-2xl space-y-10 p-6">
       <div>
-        <Link href={`/w/${id}`} className="text-sm text-gray-500 hover:underline">
+        <Link href={`/docs/${id}`} className="text-sm text-gray-500 hover:underline">
           ← {page.title}
         </Link>
         <h1 className="mt-4 text-2xl font-bold">설정</h1>
       </div>
+
+      <section>
+        <h2 className="mb-1 text-lg font-bold">공개 설정</h2>
+        <p className="mb-3 text-sm">
+          현재: <b>{page.isPublic ? '🌐 공개' : '🔒 비공개'}</b>
+        </p>
+        <form action={togglePublic.bind(null, id)}>
+          <button className={btn}>{page.isPublic ? '비공개로 바꾸기' : '공개로 바꾸기'}</button>
+        </form>
+      </section>
 
       {/* ── 멤버 ── */}
       <section>
