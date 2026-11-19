@@ -48,7 +48,7 @@ export async function requireRole(pageId: string, minRole: Role) {
   if (!UUID_RE.test(pageId)) notFound();
 
   const user = await getCurrentUser();
-  if (!user) redirect(`/login?next=/w/${pageId}`);
+  if (!user) redirect(`/login?next=/docs/${pageId}`);
 
   const role = await getRole(pageId, user.email);
   if (!role || RANK[role] < RANK[minRole]) notFound();

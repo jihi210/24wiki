@@ -1,4 +1,4 @@
-// 문서 보기 페이지: /w/문서id
+// 문서 보기 페이지: /docs/문서id
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eq } from 'drizzle-orm';

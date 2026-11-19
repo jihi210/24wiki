@@ -74,9 +74,9 @@ export default function Editor({ pageId, initialTitle, initialContent, baseVersi
     startTransition(async () => {
       const result = await savePage(pageId, title, content, baseVersion); // 서버 함수 호출!
       if ('error' in result) {
-        setError(result.error);
+        setError(result.error ?? null);
       } else {
-        router.push(`/w/${pageId}`);
+        router.push(`/docs/${pageId}`);
       }
     });
   }
@@ -126,7 +126,7 @@ export default function Editor({ pageId, initialTitle, initialContent, baseVersi
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
       <div className="mt-4 flex items-center justify-end gap-3">
-        <Link href={`/w/${pageId}`} className="text-sm text-gray-600 hover:underline">
+        <Link href={`/docs/${pageId}`} className="text-sm text-gray-600 hover:underline">
           취소
         </Link>
         <button

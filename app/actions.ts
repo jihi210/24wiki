@@ -166,7 +166,7 @@ export async function acceptInvite(token: string) {
       .where(and(eq(members.pageId, link.pageId), eq(members.email, user.email)));
   }
 
-  redirect(`/w/${link.pageId}`);
+  redirect(`/docs/${link.pageId}`);
 }
 
 // ───────────── 차단 (소유자만) ─────────────
